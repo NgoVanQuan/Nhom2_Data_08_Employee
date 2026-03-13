@@ -1,0 +1,5 @@
+data:
+  raw_path: "data/raw/HR_Analytics.csv"
+  processed_path: "data/processed/hr_cleaned.csv"
+
+random_state: 42

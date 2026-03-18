@@ -43,8 +43,8 @@ def train_semi_supervised(df, target_col='Attrition', test_size=0.2, unlabelled_
 
     # 4. Đánh giá trên tập Test
     y_pred = self_training_model.predict(X_test)
-    f1 = f1_score(y_test, y_pred)
-    
+    f1 = f1_score(y_test, y_pred, average='macro', zero_division=0)    
+    report = classification_report(y_test, y_pred, zero_division=0)
     print(f"✅ Huấn luyện xong! F1-Score trên tập Test: {f1:.4f}")
     
-    return self_training_model, classification_report(y_test, y_pred)
+    return self_training_model, report

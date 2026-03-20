@@ -1,153 +1,101 @@
 import papermill as pm
 import os
+import sys
+
+# ---------------------------------------------------------
+# TỰ ĐỘNG ĐỊNH VỊ THƯ MỤC GỐC CỦA DỰ ÁN
+# ---------------------------------------------------------
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
+os.chdir(PROJECT_ROOT)
+print(f"✅ Đã set thư mục làm việc tại: {os.getcwd()}\n")
 
 os.makedirs("notebooks/runs", exist_ok=True)
 
-# run_preprocessing_and_eda.py
-pm.execute_notebook(
-    "notebooks/preprocessing_and_eda.ipynb",
-    "notebooks/runs/preprocessing_and_eda_run.ipynb",
-    parameters=dict(
-        DATA_PATH="data/raw/online_retail.csv",
-        COUNTRY="United Kingdom",
-        OUTPUT_DIR="data/processed",
-        PLOT_REVENUE=True,         # tắt bớt plot khi chạy batch
-        PLOT_TIME_PATTERNS=True,
-        PLOT_PRODUCTS=True,
-        PLOT_CUSTOMERS=True,
-        PLOT_RFM=True,
-    ),
-    kernel_name="python3",
-)
+# ---------------------------------------------------------
+# CẤU HÌNH PIPELINE 6 BƯỚC CHUẨN MLOPS
+# ---------------------------------------------------------
+PIPELINE = [
+    {
+        "step": "Bước 1: Khám phá dữ liệu (EDA)",
+        "input_path": "notebooks/01_eda.ipynb",
+        "output_path": "notebooks/runs/01_eda_run.ipynb",
+        "params": {"DATA_PATH": "data/raw/HR_Analytics.csv"}
+    },
+    {
+        "step": "Bước 2: Tiền xử lý & Trích xuất đặc trưng",
+        "input_path": "notebooks/02_preprocess_feature.ipynb",
+        "output_path": "notebooks/runs/02_preprocess_feature_run.ipynb",
+        "params": {
+            "RAW_DATA_PATH": "data/raw/HR_Analytics.csv",
+            "OUTPUT_RULES_PATH": "data/processed/hr_rules_binned.csv",
+            "OUTPUT_ML_PATH": "data/processed/hr_ml_encoded.csv"
+        }
+    },
+    {
+        "step": "Bước 3: Khai phá Dữ liệu (FP-Growth & K-Means)",
+        "input_path": "notebooks/03_mining_or_clustering.ipynb", 
+        "output_path": "notebooks/runs/03_mining_run.ipynb",
+        "params": {
+            "RULES_DATA_PATH": "data/processed/hr_rules_binned.csv",
+            "ML_DATA_PATH": "data/processed/hr_ml_encoded.csv",
+            "MIN_SUPPORT": 0.15,
+            "N_CLUSTERS": 3
+        }
+    },
+    {
+        "step": "Bước 4a: Học máy Có giám sát (Supervised Learning)",
+        "input_path": "notebooks/04_modeling.ipynb",
+        "output_path": "notebooks/runs/04a_supervised_learning_run.ipynb",
+        "params": {
+            "ML_DATA_PATH": "data/processed/hr_ml_encoded.csv",
+            "TARGET_COL": "Attrition_Yes",
+        }
+    },
+    {
+        "step": "Bước 4b: Thử nghiệm Học máy Bán giám sát (Semi-supervised)",
+        "input_path": "notebooks/04b_semi_supervised.ipynb",
+        "output_path": "notebooks/runs/04b_semi_supervised_run.ipynb",
+        "params": {
+            "ML_DATA_PATH": "data/processed/hr_ml_encoded.csv",
+            "TARGET_COL": "Attrition_Yes",
+            "UNLABELLED_RATIO": 0.8
+        }
+    },
+    {
+        "step": "Bước 5: Đánh giá & Tổng hợp Insight",
+        "input_path": "notebooks/05_evaluation_report.ipynb", # Sửa dòng này nếu tên file 05 của bác khác nhé
+        "output_path": "notebooks/runs/05_evaluation_run.ipynb",
+        "params": {}
+    }
+]
 
-# run_basket_preparation.py
+print("🚀 BẮT ĐẦU CHẠY TỰ ĐỘNG PIPELINE HR ANALYTICS BẰNG PAPERMILL...\n")
 
-pm.execute_notebook(
-    "notebooks/basket_preparation.ipynb",
-    "notebooks/runs/basket_preparation_run.ipynb",
-    parameters=dict(
-        CLEANED_DATA_PATH="data/processed/cleaned_uk_data.csv",
-        BASKET_BOOL_PATH="data/processed/basket_bool.parquet",
-        INVOICE_COL="InvoiceNo",
-        ITEM_COL="Description",
-        QUANTITY_COL="Quantity",
-        THRESHOLD=1,
-    ),
-    kernel_name="python3",
-)
+for task in PIPELINE:
+    print(f"⏳ Đang chạy {task['step']}...")
+    
+    # Tính năng quét lỗi thông minh: Báo ngay nếu sai tên file
+    if not os.path.exists(task['input_path']):
+        print(f"\n🚨 LỖI TÌM FILE: Không tìm thấy file '{task['input_path']}'")
+        print("👉 Hệ thống phát hiện các file Notebook sau đang có mặt trong thư mục 'notebooks/':")
+        for file in os.listdir("notebooks"):
+            if file.endswith(".ipynb") and file != "runs":
+                print(f"   - {file}")
+        print("\n💡 Cách khắc phục: Bác nhìn danh sách file thực tế ở trên xem có bị dư dấu cách, viết hoa hay sai số nào không, đổi tên lại cho chuẩn là chạy được ngay!")
+        sys.exit(1)
+        
+    try:
+        pm.execute_notebook(
+            task['input_path'],
+            task['output_path'],
+            parameters=task['params'],
+            kernel_name="python3"
+        )
+        print(f"✅ Xong {task['step']}!\n")
+    except Exception as e:
+        print(f"🚨 CÓ LỖI XẢY RA BÊN TRONG FILE {task['input_path']}:")
+        print(e)
+        sys.exit(1)
 
-# Chạy Notebook Apriori Modelling
-pm.execute_notebook(
-    "notebooks/apriori_modelling.ipynb",
-    "notebooks/runs/apriori_modelling_run.ipynb",
-    parameters=dict(
-        BASKET_BOOL_PATH="data/processed/basket_bool.parquet",
-        RULES_OUTPUT_PATH="data/processed/rules_apriori_filtered.csv",
-
-        # Tham số Apriori
-        MIN_SUPPORT=0.01,
-        MAX_LEN=3,
-
-        # Generate rules
-        METRIC="lift",
-        MIN_THRESHOLD=1.0,
-
-        # Lọc luật
-        FILTER_MIN_SUPPORT=0.01,
-        FILTER_MIN_CONF=0.3,
-        FILTER_MIN_LIFT=1.2,
-        FILTER_MAX_ANTECEDENTS=2,
-        FILTER_MAX_CONSEQUENTS=1,
-
-        # Số luật để vẽ
-        TOP_N_RULES=20,
-
-        # Tắt plot khi chạy batch (bật = True nếu muốn xem hình)
-        PLOT_TOP_LIFT=True,
-        PLOT_TOP_CONF=True,
-        PLOT_SCATTER=True,
-        PLOT_NETWORK=True,
-        PLOT_PLOTLY_NETWORK=True,
-        PLOT_PLOTLY_SCATTER=True,  
-    ),
-    kernel_name="python3",
-)
-
-# Chạy Notebook FP_Growth Modelling
-pm.execute_notebook(
-    "notebooks/fp_growth_modelling.ipynb",
-    "notebooks/runs/fp_growth_modelling_run.ipynb",
-    parameters=dict(
-        BASKET_BOOL_PATH="data/processed/basket_bool.parquet",
-        RULES_OUTPUT_PATH="data/processed/rules_fpgrowth_filtered.csv",
-
-        MIN_SUPPORT=0.01,
-        MAX_LEN=3,
-
-        METRIC="lift",
-        MIN_THRESHOLD=1.0,
-
-        FILTER_MIN_SUPPORT=0.01,
-        FILTER_MIN_CONF=0.3,
-        FILTER_MIN_LIFT=1.2,
-        FILTER_MAX_ANTECEDENTS=2,
-        FILTER_MAX_CONSEQUENTS=1,
-
-        TOP_N_RULES=20,
-
-        PLOT_TOP_LIFT=True,
-        PLOT_TOP_CONF=True,
-        PLOT_SCATTER=True,
-        PLOT_NETWORK=True,
-        PLOT_PLOTLY_SCATTER=True,
-    ),
-    kernel_name="python3",
-)
-
-# Chạy Notebook So sánh Apriori và FP-Growth
-pm.execute_notebook(
-    "notebooks/compare_apriori_fpgrowth.ipynb",
-    "notebooks/runs/compare_apriori_fpgrowth_run.ipynb",
-    parameters=dict(
-        BASKET_BOOL_PATH="data/processed/basket_bool.parquet",
-
-        MIN_SUPPORT=0.01,
-        MAX_LEN=3,
-
-        METRIC="lift",
-        MIN_THRESHOLD=1.0,
-    ),
-    kernel_name="python3",
-)
-
-
-# run_clustering_from_rules.py
-pm.execute_notebook(
-    "notebooks/clustering_from_rules.ipynb",
-    "notebooks/runs/clustering_from_rules_run.ipynb",
-    parameters=dict(
-        CLEANED_DATA_PATH="data/processed/cleaned_uk_data.csv",
-        RULES_INPUT_PATH="data/processed/rules_apriori_filtered.csv",
-
-        TOP_K_RULES=200,
-        SORT_RULES_BY="lift",
-        WEIGHTING="lift",
-        MIN_ANTECEDENT_LEN=1,
-        USE_RFM=True,
-        RFM_SCALE=True,
-        RULE_SCALE=False,
-
-        K_MIN=2,
-        K_MAX=10,
-        N_CLUSTERS=None,
-        RANDOM_STATE=42,
-
-        OUTPUT_CLUSTER_PATH="data/processed/customer_clusters_from_rules.csv",
-
-        PROJECTION_METHOD="pca",
-        PLOT_2D=True,
-    ),
-    kernel_name="python3",
-)
-
-print("Đã chạy xong pipeline")
+print("🎉 ĐÃ CHẠY THÀNH CÔNG TOÀN BỘ PIPELINE DỰ ÁN!")
